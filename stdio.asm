@@ -64,15 +64,14 @@ PrintBin	proc
 ;----------------------------------------------------------------------------------------------------
 PrintDec	proc
 
-		xor		ax,		bx
-		xor		bx,		ax
-		xor		ax,		bx	; Exchange ax and bx
+		xchg		ax,		bx
 
 		add		di,		08h
 
 		mov		cx,		0Ah
 
 @@PrintD:	xor		dx,		dx
+	
 		div 		cx
 		add		dl,		30h	; '0'
 		mov		bl,		dl
