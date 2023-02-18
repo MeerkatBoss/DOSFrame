@@ -1,12 +1,15 @@
 ;====================================================================================================
 ; box.asm
 ;====================================================================================================
-; Provides:
-;	functions:	MakeBox
-;			PrintRow
-;====================================================================================================
-; Depends:	vidmacro.asm
-;====================================================================================================
+.186
+.model tiny
+.code
+
+include stdmacro.asm
+
+include vidmacro.asm
+
+public MakeBox, PrintRow
 
 ;----------------------------------------------------------------------------------------------------
 ; Prints box using top-left corner offset and dimensions.
@@ -15,48 +18,55 @@
 ;
 ;----------------------------------------------------------------------------------------------------
 ; Entry:	ES:DI	- top-left corner address in memory
+;		DS:SI	- start of string style description
 ;		BH	- box width
 ;		BL	- box height
-;		CH	- border screen attribute
-;		CL	- border character
 ;		DH	- fill screen attribute
-;		DL	- fill character
+;		DL	- border attribute
 ; Exit:		None
-; Destroys:	AX, CX, DX, DI, DF
+; Destroys:	AX, CX, DX, DI, SI, DF
 ;----------------------------------------------------------------------------------------------------
 MakeBox		proc
-		push		dx
 		push		di				; save di before destroying function
 
+		push		dx
 		mov		ax,		0FFFFh		; (-1, -1)
 		.get_offset					; offset di a bit
+		pop		dx
 
-		mov		ax,		cx		; border character
+		mov		ah,		dl
+		mov		al, byte ptr	[si]		; corner character
+		stosw
+
+		mov		al, byte ptr	[si+1]		; top character
 		xor		cx,		cx
 		mov		cl,		bh
-		add		cx,		2h		; border is a bit longer than box
 		call		PrintRow
 
+		mov		al, byte ptr	[si+2]		; corner character
+		stosw
+
 		pop		di
-		pop		dx
 
 		test		bl,		not 0
 		jz		@@BottomBorder			; nothing to print inside
-
-		xor		ax,		dx		; exchange ax and dx
-		xor		dx,		ax		; dx holds border character and attribute
-		xor		ax,		dx		; ax holds fill   character and attribute
 
 		mov		cl,		bl		; no need to xor cx, as it's 0 after PrintRow
 
 @@PrintInside:	push		cx	; save cx		;<--------------------------------------\
 		push		di	; save di		;					|
 								;					|
-		mov		es:[di-2],	dx		; print border char			|
+		mov		al, byte ptr	[si+3]		; border char				|
+		mov		es:[di-2],	ax		; 					|
+								;					|
+		mov		al, byte ptr	[si+4]		; fill char				|
+		mov		ah,		dh		; fill color				|
 		xor		cx,		cx		;					|
 		mov		cl,		bh		;					|
-		call		PrintRow; print box fill	;					|
-		mov		es:[di],	dx		;					|
+		call		PrintRow			; fill box				|
+		mov		al, byte ptr	[si+5]		; border char				|
+		mov		ah,		dl		; border color				|
+		mov		es:[di],	ax		;					|
 								;					|
 		pop		di				;					|
 		add		di,		2*SCRWIDTH	; next row				|
@@ -64,13 +74,16 @@ MakeBox		proc
 		pop		cx				;					|
 		loop		@@PrintInside			;<--------------------------------------/
 
-		mov		ax,		dx		; store border char in ax
 
-@@BottomBorder:	mov		cl,		bh		; cx alrady 0 after loop
-		add		cx,		2h		; border loger than box
-		sub		di,		2h		; border to the left of the box
+@@BottomBorder: mov		al, byte ptr	[si+6]		; corner char
+		mov		es:[di-2],	ax
 
+		mov		al, byte ptr	[si+7]		; bottom char
+		mov		cl,		bh		; cx alrady 0 after loop
 		call		PrintRow
+
+		mov		al, byte ptr	[si+8]		; corner char
+		stosw
 
 		ret
 		endp
@@ -90,12 +103,12 @@ PrintRow	proc
 		cld
 
 		test		cx,		not 0h
-		jnz		@@Next
+		jnz		@@Print
 		ret
 
-@@Next:		stosw
-		loop		@@Next
+@@Print:	rep		stosw
 
 		ret
 		endp
 ;----------------------------------------------------------------------------------------------------
+end

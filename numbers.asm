@@ -8,6 +8,12 @@ include stdmacro.asm
 
 include vidmacro.asm
 
+extrn	MakeBox:proc
+extrn	ReadDec:proc
+extrn	PrintDec:proc
+extrn	PrintHex:proc
+extrn	PrintBin:proc
+
 NUMBER		equ	5418d
 BOX_WIDTH	equ	18d
 BOX_HEIGHT	equ	3d
@@ -123,7 +129,7 @@ Start:		.read_num
 		jnz		@@InvalidInput
 		.exit_program	0
 
-@@Compute:	push		ax
+@@Compute:	push		ax		; save number
 
 		.load_vbuf_es
 
@@ -133,101 +139,31 @@ Start:		.read_num
 
 		push		di
 
+		mov		si,		offset Style2
 		mov		bx,		(BOX_WIDTH 	shl 8) or BOX_HEIGHT
-		mov		cx,		(BORDER_COLOR 	shl 8) or BORDER_CHAR
-		mov		dx,		(FILL_COLOR	shl 8) or FILL_CHAR
+		mov		dx,		(FILL_COLOR	shl 8) or BORDER_COLOR
 		call		MakeBox
 
-		mov		si,		sp
-
-		mov		di,		[si]
+		pop		di
 		.load_xy	BOX_WIDTH,	0
 		.get_offset
 
-		mov		ax,		[si+2]
-		mov		bx,		[si+4]
+		pop		bx
+		pop		ax
 
 		add		bx,		ax
 		.print_three
 
-		mov		si,		sp
-		mov		di,		[si]
-
-		.load_xy	BOX_WIDTH+1,	0
-		.get_offset
-		mov		bx,		(BOX_WIDTH 	shl 8) or BOX_HEIGHT
-		mov		cx,		(BORDER_COLOR 	shl 8) or BORDER_CHAR
-		mov		dx,		(FILL_COLOR	shl 8) or FILL_CHAR
-		call		MakeBox
-
-		mov		si,		sp
-
-		mov		di,		[si]
-		.load_xy	2*BOX_WIDTH+1,	0
-		.get_offset
-
-		mov		ax,		[si+2]
-		mov		bx,		[si+4]
-
-		sub		bx,		ax
-		.print_three
-
-		mov		si,		sp
-		mov		di,		[si]
-
-		.load_xy	0,		BOX_HEIGHT+1
-		.get_offset
-		mov		bx,		(BOX_WIDTH 	shl 8) or BOX_HEIGHT
-		mov		cx,		(BORDER_COLOR 	shl 8) or BORDER_CHAR
-		mov		dx,		(FILL_COLOR	shl 8) or FILL_CHAR
-		call		MakeBox
-
-		mov		si,		sp
-
-		mov		di,		[si]
-		.load_xy	BOX_WIDTH,	BOX_HEIGHT+1
-		.get_offset
-
-		mov		bx,		[si+2]
-		mov		ax,		[si+4]
-
-		mul		bx
-		mov		bx,		ax
-		.print_three
-
-		mov		si,		sp
-		mov		di,		[si]
-
-		.load_xy	BOX_WIDTH+1,		BOX_HEIGHT+1
-		.get_offset
-		mov		bx,		(BOX_WIDTH 	shl 8) or BOX_HEIGHT
-		mov		cx,		(BORDER_COLOR 	shl 8) or BORDER_CHAR
-		mov		dx,		(FILL_COLOR	shl 8) or FILL_CHAR
-		call		MakeBox
-
-		mov		si,		sp
-
-		mov		di,		[si]
-		.load_xy	2*BOX_WIDTH+1,	BOX_HEIGHT+1
-		.get_offset
-
-		mov		bx,		[si+2]
-		mov		ax,		[si+4]
-
-		xor		dx,		dx
-		div		bx
-		mov		bx,		ax
-		.print_three
-
 		.exit_program 0
-
-
-include box.asm
-include stdio.asm
 
 StrNum		db 	'5418'
 StrNumLen	equ 	$ - StrNum
 StrErrInpMsg	db	ERRINPMSG, 0Ah, 0Dh, '$'
 TextBuffer	db	BUFLEN dup (0)
+
+;		   t.left	top	t.right	left	fill	right	b.left	bott.	b.right  
+Style0		db 0C9h,	0CDh,	0BBh,	0BAh,	020h,	0BAh,	0C8h,	0CDh,	0BCh	; double border
+Style1		db 0DAh,	0C4h,	0BFh,	0B3h,	020h,	0B3h,	0C0h,	0C4h,	0D9h	; single border
+Style2		db 002h,	003h,	002h,	003h,	020h,	003h,	002h,	003h,	002h	; hearts 
 
 end Start
