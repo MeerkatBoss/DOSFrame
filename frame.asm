@@ -14,24 +14,54 @@ include stdmacro.asm
 include vidmacro.asm
 
 extrn	MakeBox:proc
+extrn	GetNextByte:proc
 
 BOX_HEIGHT	equ	3d
-BORDER_COLOR	equ	03Dh
-FILL_COLOR	equ	30h
+; BORDER_COLOR	equ	03Dh
+; FILL_COLOR	equ	30h
 USER_STYLE	equ	3Fh	; '?'
 
 BUFLEN		equ	50h
 MAXMSGLEN	equ	60d
 PROMPT		equ	'Enter message you want to display:'
 ERRINPMSG	equ	'Input too long.'
+NOSTYLEMSG	equ	'Style not provided.'
 
 
-Start:		xor		ax,		ax		
-		mov		al, byte ptr	[ArgStr+1]
+Start:		mov		bp,		sp
+
+		mov		di, offset	ArgStr	
+		xor		cx,		cx
+		mov		cl, byte ptr	[ArgLen]
+		call		GetNextByte
+		push		ax				; save fill color
+
+		call		GetNextByte
+		push		ax				; save border color
+
+		xor		ax,		ax		
+		mov		al,		20h
+		repz		scasb				; skip spaces
+		
+		jnz		@@SelectStyle
+		test		cx,		cx
+		jnz		@@SelectStyle
+
+		mov		ah,		09h
+		mov		dx, offset	StrNoStyleMsg
+		int		21h
+		.exit_program	1
+		
+
+@@SelectStyle:	mov		al, byte ptr	[di-1]
 		cmp		al,		USER_STYLE
 		jne		@@NoUserStyle
 
-		lea		si, byte ptr	[ArgStr+3]
+		mov		al,		20h
+		repz		scasb				; skip spaces
+		dec		di
+		mov		si,		di
+
 		jmp		@@ReadStr
 		
 @@NoUserStyle:	sub		al,		30h		; '0'
@@ -63,7 +93,7 @@ Start:		xor		ax,		ax
 		.exit_program	1
 	
 @@DrawBox:	.load_vbuf_es
-		push		ax
+		push		ax				; save string length + 2
 
 		add		ax,		2h
 		mov		bx,		ax		; string length + 2 in bx
@@ -79,17 +109,27 @@ Start:		xor		ax,		ax
 
 		push		di
 
+		push		bx
+
+		mov		dx,		[bp-2]
+		shl		dx,		8h		; fill color in dh
+		mov		bx,		[bp-4]
+		mov		dl,		bl		; border color in dl
+
+		pop		bx
+
 		shl		bx,		8h		; width in bh
 		mov		bl,		BOX_HEIGHT	; height in bl
-		mov		dx,		(FILL_COLOR	shl 8) or BORDER_COLOR
+
 		call		MakeBox
 
 		pop		di
 		add		di,		4 + SCRWIDTH*2
+
 		pop		cx
 		sub		cx,		2		; string length in cx
 		mov		si, offset	TextBuffer
-		mov		ah,		FILL_COLOR
+		mov		ah,		[bp-2]
 
 @@PrintStr:	lodsb
 		stosw
@@ -100,6 +140,7 @@ Start:		xor		ax,		ax
 		.exit_program 0
 
 StrErrInpMsg	db	ERRINPMSG, 0Ah, 0Dh, '$'
+StrNoStyleMsg	db	NOSTYLEMSG, 0Ah, 0Dh, '$'
 StrPrompt	db	PROMPT, 0Ah, 0Dh, '$'
 TextBuffer	db	BUFLEN dup (?)
 
@@ -107,5 +148,6 @@ TextBuffer	db	BUFLEN dup (?)
 Style0		db 0C9h,	0CDh,	0BBh,	0BAh,	020h,	0BAh,	0C8h,	0CDh,	0BCh	; double border
 Style1		db 0DAh,	0C4h,	0BFh,	0B3h,	020h,	0B3h,	0C0h,	0C4h,	0D9h	; single border
 Style2		db 002h,	003h,	002h,	003h,	020h,	003h,	002h,	003h,	002h	; hearts 
+Style3		db 024h,	00Bh,	024h,	00Bh,	020h,	00Bh,	024h,	00Bh,	024h	; 300$
 
 end Start

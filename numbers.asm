@@ -6,7 +6,7 @@
 .code
 include stdmacro.asm
 
-public PrintHex, PrintBin, PrintDec, ReadDec
+public PrintHex, PrintBin, PrintDec, ReadDec, ReadHex
 
 ;----------------------------------------------------------------------------------------------------
 ; Prints number in hex
@@ -99,34 +99,80 @@ PrintDec	proc
 ;----------------------------------------------------------------------------------------------------
 ; Converts string of given length to number, interpreting it as written in decimal
 ;----------------------------------------------------------------------------------------------------
-; Entry:	DS:SI	- string address
+; Entry:	ES:DI	- string address
 ;		CX	- string length
 ; Exit:		AX	- converted number
-; Destroys:	CX, DX, SI
+; Destroys:	CX, DX, DI
 ;----------------------------------------------------------------------------------------------------
 ReadDec		proc
 
 		xor		ax,		ax
 
 		test		cx,		not 0
-		jnz		@@ReadN
+		jnz		@@ReadD
 		ret
 
-@@ReadN:	mov		dx,		ax
+@@ReadD:	mov		dx,		ax
 		shl		ax,		02h
 		add		ax,		dx
 		shl		ax,		01h		; 10*ax = (4*ax+ax)*2
 
 		xor		dx,		dx
-		mov		dl, byte ptr	[si]
+		mov		dl, byte ptr	es:[di]
+		inc		di
 		sub		dl,		30h		; '0'
 		add		ax,		dx
-		inc		si
-		loop		@@ReadN
+		loop		@@ReadD
 		
 		ret
 		endp
 ;----------------------------------------------------------------------------------------------------
+
+;----------------------------------------------------------------------------------------------------
+; Converts string of given length to number, interpreting it as written in hex.
+;----------------------------------------------------------------------------------------------------
+; Entry:	ES:DI	- string address
+;		CX	- string length
+; Exit:		AX	- converted number
+;		ES:DI	- char after number end
+;		CX	- 0
+; Destroys:	DX
+;----------------------------------------------------------------------------------------------------
+ReadHex		proc
+		xor		ax,		ax
+		xor		dx,		dx
+
+		test		cx,		not 0
+		jnz		@@ReadH
+		ret
+
+@@ReadH:	shl		dx,		4h
+
+		mov		al, byte ptr	es:[di]
+		inc		di
+
+		sub		ax,		61h	; 'a'
+		jl		@@UpperCase
+
+		add		ax,		0Ah
+		jmp		@@LoopEndH
+
+@@UpperCase:	add		ax,		20h	; 'A' - 'a'
+		jl		@@Number
+
+		add		ax,		0Ah
+		jmp		@@LoopEndH
+
+@@Number:	add		ax,		11h	; 'A' - '0'
+@@LoopEndH:	add		dx,		ax
+
+		loop		@@ReadH
+
+		mov		ax,		dx
+		ret
+		endp
+;----------------------------------------------------------------------------------------------------
+
 
 .data
 
