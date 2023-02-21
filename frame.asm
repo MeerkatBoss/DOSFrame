@@ -15,14 +15,12 @@ include vidmacro.asm
 
 extrn	MakeBox:proc
 extrn	GetNextByte:proc
+extrn	ReadFormat:proc
 
 BOX_HEIGHT	equ	3d
-; BORDER_COLOR	equ	03Dh
-; FILL_COLOR	equ	30h
 USER_STYLE	equ	3Fh	; '?'
 
-BUFLEN		equ	50h
-MAXMSGLEN	equ	60d
+TEXTLEN		equ	400h
 PROMPT		equ	'Enter message you want to display:'
 ERRINPMSG	equ	'Input too long.'
 NOSTYLEMSG	equ	'Style not provided.'
@@ -34,10 +32,10 @@ Start:		mov		bp,		sp
 		xor		cx,		cx
 		mov		cl, byte ptr	[ArgLen]
 		call		GetNextByte
-		push		ax				; save fill color
+		push		ax		; [bp-2] - fill color
 
 		call		GetNextByte
-		push		ax				; save border color
+		push		ax		; [bp-4] - border color 
 
 		xor		ax,		ax		
 		mov		al,		20h
@@ -74,18 +72,15 @@ Start:		mov		bp,		sp
 		mov		dx, offset	StrPrompt
 		int		21h
 
-		mov		ah,		3Fh
-		xor		bx,		bx
-		mov		cx,		BUFLEN
-		mov		dx, offset	TextBuffer
-		int		21h
-		cmp		ax,		2h
-		ja		@@CheckLength
+		mov		di, offset	TextBuffer
+		mov		ah, byte ptr	[bp-2]
+		mov		cx,		TEXTLEN
+		push		si
+		call		ReadFormat
+		pop		si
 
-		.exit_program	0
-
-@@CheckLength:	cmp		ax,		MAXMSGLEN + 2	; exclude 0D 0A
-		jbe		@@DrawBox
+		test		ax,		ax
+		jge		@@DrawBox
 
 		mov		ah,		09h
 		mov		dx, offset	StrErrInpMsg
@@ -93,14 +88,16 @@ Start:		mov		bp,		sp
 		.exit_program	1
 	
 @@DrawBox:	.load_vbuf_es
-		push		ax				; save string length + 2
+		push		ax				; save max line length
+		push		cx				; save line count
 
-		add		ax,		2h
-		mov		bx,		ax		; string length + 2 in bx
+		add		ax,		4h
+		mov		bx,		ax		; string length + 4 in bx
 		shr		ax,		1h
 		neg		ax
 		shl		ax,		8h		; -width/2 in ah
-		mov		al,		BOX_HEIGHT
+		mov		al,		cl
+		add		al,		2h		; line count + 1 in al
 		shr		al,		1h
 		neg		al				; -height/2 in al
 
@@ -119,30 +116,45 @@ Start:		mov		bp,		sp
 		pop		bx
 
 		shl		bx,		8h		; width in bh
-		mov		bl,		BOX_HEIGHT	; height in bl
+		mov		bl,		cl
+		add		bl,		2h		; height in bl
 
 		call		MakeBox
 
 		pop		di
 		add		di,		4 + SCRWIDTH*2
 
-		pop		cx
-		sub		cx,		2		; string length in cx
+		pop		cx		; line count in cx
 		mov		si, offset	TextBuffer
-		mov		ah,		[bp-2]
 
-@@PrintStr:	lodsb
-		stosw
-		loop		@@PrintStr
+		pop		bx
 
+		test		cx,		cx
+		jz		@@EndProgram
+
+@@PrintLines:	push		cx
+		push		di
+		lodsw
+		mov		cx,		ax
+		mov		dx,		bx
+		sub		dx,		cx
+		and		dx,		not 1h
+
+		add		di, 		dx
+		rep		movsw
+	
+		pop		di
+		add		di,		2*SCRWIDTH
+		pop		cx
+		loop		@@PrintLines
 	
 
-		.exit_program 0
+@@EndProgram:	.exit_program 0
 
 StrErrInpMsg	db	ERRINPMSG, 0Ah, 0Dh, '$'
 StrNoStyleMsg	db	NOSTYLEMSG, 0Ah, 0Dh, '$'
 StrPrompt	db	PROMPT, 0Ah, 0Dh, '$'
-TextBuffer	db	BUFLEN dup (?)
+TextBuffer	dw	TEXTLEN dup (?)
 
 ;		   t.left	top	t.right	left	fill	right	b.left	bott.	b.right  
 Style0		db 0C9h,	0CDh,	0BBh,	0BAh,	020h,	0BAh,	0C8h,	0CDh,	0BCh	; double border
