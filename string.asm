@@ -4,51 +4,14 @@
 .186
 .model tiny
 .code
-public	GetNextByte, ReadFormat
+public	ReadFormat
+
+include stdmacro.asm
 
 extrn ReadHex:proc
 
 BUFLEN		equ 80d
 MAXLINE		equ 70d
-
-;----------------------------------------------------------------------------------------------------
-; Get first hex integer encountered in string
-;----------------------------------------------------------------------------------------------------
-; Entry:	ES:DI	- string start address
-;		CX	- string length
-; Exit:		ES:DI	- first not converted character
-;		CX	- remaining string length
-;		AL	- converted number
-; Destroys:	AH, BX, DX
-;----------------------------------------------------------------------------------------------------
-GetNextByte	proc
-
-		xor		ax,		ax
-
-		mov		al,		20h	; ' '
-		repz		scasb
-		dec		di
-		test		cx,		cx
-		jz		@@GNBEnd
-		
-		mov		bx,		cx
-		inc		bx
-
-		mov		cx,		2h
-		repnz		scasb			; until space or 2 chars
-
-		sub		cx,		2h
-		neg		cx			; -(cx - 2) = 2 - cx (safe negation of small values)
-		sub		bx,		cx	; remaining length in bx
-		sub		di,		cx
-
-		call		ReadHex
-
-		mov		cx,		bx	; remaining length
-
-@@GNBEnd:	ret
-		endp
-;----------------------------------------------------------------------------------------------------
 
 ;----------------------------------------------------------------------------------------------------
 ; Read multiline formatted string and store it in buffer
@@ -65,7 +28,7 @@ GetNextByte	proc
 ;----------------------------------------------------------------------------------------------------
 ReadFormat	proc
 
-		push		bp
+		push		bp		; TODO: enter (not neccessery)?
 		mov		bp,		sp
 		
 		push		ax		; [bp-2] - screen attrubute
@@ -73,36 +36,39 @@ ReadFormat	proc
 		push		0		; [bp-6] - maximum line length
 		push		0		; [bp-8] - number of lines read
 
-@@ReadLoop:	mov		ah,		3Fh
-		xor		bx,		bx
-		mov		cx,		BUFLEN
-		mov		dx, offset	TextBuffer
-		int		21h
+@@ReadLoop:	.scan_str	TextBuffer,	BUFLEN
+;		mov		ah,		3Fh
+;		xor		bx,		bx
+;		mov		cx,		BUFLEN
+;		mov		dx, offset	TextBuffer
+;		int		21h
 
 
-		cmp		ax,		MAXLINE + 2	; exlude 0A 0D
-		ja		@@ReadLong	; Line too long
+		cmp		ax,		MAXLINE + 2	; exlude 0D 0A
+		ja		@@ErrTooLong			; Line too long
 
-		sub		ax,		2
-		jle		@@ReadOk	; Empty line, stop input
+		sub		ax,		2		; ignore 0D 0A at end
+		jle		@@Success			; Empty line, stop input
 
 		mov		cx,		[bp-4]
 		cmp		ax,		cx
-		jae		@@ReadLong	; Can't move to buffer
+		jae		@@ErrTooLong			; Can't move to buffer
 
-@@ReadStore:	stosw				; store line length in buffer
+		; MOST IMPORTANT THING IN THIS PROGRAM, DO NOT TOUCH
+@@ReadStore:	;stosw				; store line length in buffer
+		add		di,		2
 
 		mov		cx,		ax
 		mov		ax, word ptr	[bp-2]
 		mov		si, offset	TextBuffer
-		call		StoreLine
+		call		FormatLine
 
 		mov		bx,		cx
 		shl		bx,		1h
-		add		bx,		2h
-		sub		di,		bx
-		mov		es:[di],	cx
-		add		di,		bx
+		add		bx,		2h	; bx = 2*cx + 2
+		sub		di,		bx	; di -= 2*cx + 2 (offset di by length+1 words)
+		mov		es:[di],	cx	; store line length before string
+		add		di,		bx	; di += 2*cx + 2 (restore di)
 
 		mov		bx, word ptr	[bp-4]
 		sub		bx,		cx
@@ -123,13 +89,13 @@ ReadFormat	proc
 		
 		jmp		@@ReadLoop
 
-@@ReadLong:	mov		ax,		-1d
-		jmp		@@ReadEnd
+@@ErrTooLong:	mov		ax,		-1d
+		jmp		@@End
 
-@@ReadOk:	mov		ax, word ptr	[bp-6]
+@@Success:	mov		ax, word ptr	[bp-6]
 		mov		cx, word ptr	[bp-8]
 
-@@ReadEnd:	mov		sp,		bp
+@@End:		mov		sp,		bp	; TODO: leave?
 		pop		bp
 
 		ret
@@ -137,7 +103,7 @@ ReadFormat	proc
 ;----------------------------------------------------------------------------------------------------
 
 ;----------------------------------------------------------------------------------------------------
-; Store line
+; Interpret all escaped characters in line and store all symbols in buffer alongside their attributes
 ;----------------------------------------------------------------------------------------------------
 ; Entry:	ES:DI	- result buffer
 ;		DS:SI	- source buffer
@@ -148,13 +114,15 @@ ReadFormat	proc
 ;		CX	- stored line length
 ; Destroys:	BX, DX, SI
 ;----------------------------------------------------------------------------------------------------
-StoreLine	proc
+FormatLine	proc
 
 		test		cx,		cx
-		jz		@@StoreEnd
+		jnz		@@StoreLoop
+		ret				; this is not very efficient but I don't want to use long jump
 
-@@StoreLoop:	mov		al, byte ptr	ds:[si]
-		inc		si
+@@StoreLoop:	lodsb
+;		mov		al, byte ptr	ds:[si]
+;		inc		si
 
 		cmp		al,		5Ch	; backslash
 		je		@@CodeChar
@@ -168,12 +136,12 @@ StoreLine	proc
 
 @@CodeChar:	push		ax
 		push		bx
-		xchg		di,		si
+;		xchg		di,		si
 		dec		cx
 
-		call		GetNextByte
+		.get_next_byte
 		
-		xchg		di,		si
+;		xchg		di,		si
 
 		pop		bx
 
@@ -188,16 +156,16 @@ StoreLine	proc
 		jmp		@@StoreLoop
 
 @@CodeAttr:	push		bx
-		xchg		di,		si
+;		xchg		di,		si
 		dec		cx
 
-		call		GetNextByte
+		.get_next_byte
 		
-		xchg		di,		si
+;		xchg		di,		si
 
 		pop		bx
 
-		shl		ax,		8h
+		shl		ax,		8h	; Move attribute to AH
 
 		test		cx,		cx
 		jz		@@StoreStop

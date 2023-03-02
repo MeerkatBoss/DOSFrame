@@ -24,7 +24,7 @@ public MakeBox, PrintRow
 ;		DH	- fill screen attribute
 ;		DL	- border attribute
 ; Exit:		None
-; Destroys:	AX, CX, DX, DI, SI, DF
+; Destroys:	AX, CX, DX, DI, DF
 ;----------------------------------------------------------------------------------------------------
 MakeBox		proc
 		push		di				; save di before destroying function
@@ -102,13 +102,12 @@ MakeBox		proc
 PrintRow	proc
 		cld
 
-		test		cx,		not 0h
-		jnz		@@Print
-		ret
+		test		cx,		cx
+		jz		@@SkipPrint                ; TODO:!
 
-@@Print:	rep		stosw
+		rep		stosw
 
-		ret
+@@SkipPrint:	ret
 		endp
 ;----------------------------------------------------------------------------------------------------
 end

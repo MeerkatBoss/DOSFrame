@@ -26,9 +26,9 @@ SCRMID		equ VBUFSIZE/2
 ;----------------------------------------------------------------------------------------------------
 ; Entry:	None
 ; Exit:		ES = VBUFSEGMENT
-; Destr:	BX
+; Destr:	BX			; TODO: remove dummy params, make it .load_segment_const es, VBUF...
 ;----------------------------------------------------------------------------------------------------
-.load_vbuf_es	macro x, y
+.load_vbuf_es	macro x, y	
 		.do_nop
 		
 		mov		bx,		VBUFSEGMENT
@@ -44,7 +44,7 @@ SCRMID		equ VBUFSIZE/2
 ; Entry:	x, y
 ; Exit:		AH	= x
 ;		AL	= y
-; Destroys:	None
+; Destroys:	None                 TODO: Make ax param of .load_xy? .load_xy ax, x, y
 ;----------------------------------------------------------------------------------------------------
 .load_xy	macro x, y
 		.do_nop

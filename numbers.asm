@@ -6,6 +6,8 @@
 .code
 include stdmacro.asm
 
+locals @@
+
 public PrintHex, PrintBin, PrintDec, ReadDec, ReadHex
 
 ;----------------------------------------------------------------------------------------------------
@@ -15,21 +17,21 @@ public PrintHex, PrintBin, PrintDec, ReadDec, ReadHex
 ;		AH	- symbol attribute
 ;		BX	- number to print
 ; Exit:		None
-; Destr:	AL, BX, SI, DI
+; Destr:	AL, BX, SI, DI, DF
 ;----------------------------------------------------------------------------------------------------
 PrintHex	proc
 
 		add		di,		06h
 		std
 
-@@PrintH:	mov		si,		bx	
+@@PrintLoop:	mov		si,		bx	
 		and		si,		0Fh
 		mov		al,    byte ptr	[HexDigits+si]
 
 		stosw
 		
 		shr		bx,		4h
-		jnz		@@PrintH
+		jnz		@@PrintLoop
 		
 		ret
 		endp
@@ -42,14 +44,14 @@ PrintHex	proc
 ;		AH	- symbol attribute
 ;		BX	- number to print
 ; Exit:		None
-; Destr:	AL, BX, DX, DI
+; Destr:	AL, BX, DX, DI, DF
 ;----------------------------------------------------------------------------------------------------
 PrintBin	proc
 
 		add		di,		1Eh
 		std
 
-@@PrintB:	mov		dx,		bx	
+@@PrintLoop:	mov		dx,		bx	
 		and		dx,		01h
 		add		dx,		30h	; '0'
 		mov		al,		dl
@@ -57,7 +59,7 @@ PrintBin	proc
 		stosw
 		
 		shr		bx,		1h
-		jnz		@@PrintB
+		jnz		@@PrintLoop
 		
 		ret
 		endp
@@ -74,13 +76,13 @@ PrintBin	proc
 ;----------------------------------------------------------------------------------------------------
 PrintDec	proc
 
-		xchg		ax,		bx
+		xchg		ax,		bx ; TODO: Consider allowing user to make this decision himself 
 
 		add		di,		08h
 
 		mov		cx,		0Ah
 
-@@PrintD:	xor		dx,		dx
+@@PrintLoop:	xor		dx,		dx
 	
 		div 		cx
 		add		dl,		30h	; '0'
@@ -90,7 +92,7 @@ PrintDec	proc
 		sub		di,		02h
 
 		test		ax,		not 0
-		jnz		@@PrintD
+		jnz		@@PrintLoop
 
 		ret
 		endp
@@ -109,10 +111,10 @@ ReadDec		proc
 		xor		ax,		ax
 
 		test		cx,		not 0
-		jnz		@@ReadD
+		jnz		@@ReadLoop
 		ret
 
-@@ReadD:	mov		dx,		ax
+@@ReadLoop:	mov		dx,		ax
 		shl		ax,		02h
 		add		ax,		dx
 		shl		ax,		01h		; 10*ax = (4*ax+ax)*2
@@ -122,7 +124,7 @@ ReadDec		proc
 		inc		di
 		sub		dl,		30h		; '0'
 		add		ax,		dx
-		loop		@@ReadD
+		loop		@@ReadLoop
 		
 		ret
 		endp
@@ -131,10 +133,10 @@ ReadDec		proc
 ;----------------------------------------------------------------------------------------------------
 ; Converts string of given length to number, interpreting it as written in hex.
 ;----------------------------------------------------------------------------------------------------
-; Entry:	ES:DI	- string address
+; Entry:	ES:SI	- string address
 ;		CX	- string length
 ; Exit:		AX	- converted number
-;		ES:DI	- char after number end
+;		ES:SI	- char after number end
 ;		CX	- 0
 ; Destroys:	DX
 ;----------------------------------------------------------------------------------------------------
@@ -142,34 +144,35 @@ ReadHex		proc
 		xor		ax,		ax
 		xor		dx,		dx
 
-		test		cx,		not 0
-		jnz		@@ReadH
-		ret
+		test		cx,		cx
+		jz		@@ProcEnd
 
-@@ReadH:	shl		dx,		4h
+@@ReadLoop:	shl		dx,		4h	; * 16
 
-		mov		al, byte ptr	es:[di]
-		inc		di
+		lodsb
+;		mov		al, byte ptr	es:[si]
+;		inc		di
 
+; @@LowerCase:
 		sub		ax,		61h	; 'a'
 		jl		@@UpperCase
 
 		add		ax,		0Ah
-		jmp		@@LoopEndH
+		jmp		@@LoopEnd
 
 @@UpperCase:	add		ax,		20h	; 'A' - 'a'
 		jl		@@Number
 
 		add		ax,		0Ah
-		jmp		@@LoopEndH
+		jmp		@@LoopEnd
 
 @@Number:	add		ax,		11h	; 'A' - '0'
-@@LoopEndH:	add		dx,		ax
 
-		loop		@@ReadH
+@@LoopEnd:	add		dx,		ax
+		loop		@@ReadLoop
 
 		mov		ax,		dx
-		ret
+@@ProcEnd:		ret
 		endp
 ;----------------------------------------------------------------------------------------------------
 

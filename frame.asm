@@ -9,13 +9,14 @@ ArgStr:
 
 org 100h
 
+extrn	MakeBox:proc
+extrn	ReadFormat:proc
+extrn	ReadHex:proc
+
 include stdmacro.asm
 
 include vidmacro.asm
 
-extrn	MakeBox:proc
-extrn	GetNextByte:proc
-extrn	ReadFormat:proc
 
 BOX_HEIGHT	equ	3d
 USER_STYLE	equ	3Fh	; '?'
@@ -26,58 +27,47 @@ ERRINPMSG	equ	'Input too long.'
 NOSTYLEMSG	equ	'Style not provided.'
 
 
-Start:		mov		bp,		sp
+Start:		mov		bp,		sp			; TODO: Extract smth
 
-		mov		di, offset	ArgStr	
+		mov		si, offset	ArgStr	
 		xor		cx,		cx
 		mov		cl, byte ptr	[ArgLen]
-		call		GetNextByte
+		.get_next_byte
 		push		ax		; [bp-2] - fill color
 
-		call		GetNextByte
+		.get_next_byte
 		push		ax		; [bp-4] - border color 
 
-		xor		ax,		ax		
-		mov		al,		20h
-		repz		scasb				; skip spaces
+		.skip_spaces
 		
-		jnz		@@SelectStyle
-		test		cx,		cx
-		jnz		@@SelectStyle
+		lodsb
+		cmp		al,		20h
+		jne		@@SelectStyle
 
-		mov		ah,		09h
-		mov		dx, offset	StrNoStyleMsg
-		int		21h
+		.print_str	StrNoStyleMsg
 		.exit_program	1
-		
 
-@@SelectStyle:	mov		al, byte ptr	[di-1]
-		cmp		al,		USER_STYLE
+@@SelectStyle:	cmp		al,		USER_STYLE
 		jne		@@NoUserStyle
 
-		mov		al,		20h
-		repz		scasb				; skip spaces
-		dec		di
-		mov		si,		di
+		.skip_spaces
+		mov		bx,		si
 
 		jmp		@@ReadStr
 		
 @@NoUserStyle:	sub		al,		30h		; '0'
-		mov		si,		ax
+		mov		bx,		ax
 		shl		ax,		3h
-		add		si,		ax		; ax*8 + ax = 9*ax
-		add		si, offset	Style0
+		add		bx,		ax		; ax*8 + ax = 9*ax
+		add		bx, offset	Style0
 
-@@ReadStr:	mov		ah,		09h	
-		mov		dx, offset	StrPrompt
-		int		21h
+@@ReadStr:	push		bx				; save style offset
+		.print_str	StrPrompt
 
 		mov		di, offset	TextBuffer
 		mov		ah, byte ptr	[bp-2]
 		mov		cx,		TEXTLEN
-		push		si
 		call		ReadFormat
-		pop		si
 
 		test		ax,		ax
 		jge		@@DrawBox
@@ -87,7 +77,9 @@ Start:		mov		bp,		sp
 		int		21h
 		.exit_program	1
 	
-@@DrawBox:	.load_vbuf_es
+@@DrawBox:	
+		pop		si				; restore style offset
+		.load_vbuf_es
 		push		ax				; save max line length
 		push		cx				; save line count
 
@@ -118,6 +110,7 @@ Start:		mov		bp,		sp
 		shl		bx,		8h		; width in bh
 		mov		bl,		cl
 		add		bl,		2h		; height in bl
+
 
 		call		MakeBox
 
